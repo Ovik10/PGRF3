@@ -1,12 +1,20 @@
 #version 150
 in vec2 texCoord;
+in vec3 normal;
+in vec3 light;
 
 uniform sampler2D mosaic;
 
 out vec4 outColor; // output from the fragment shader
 
 void main() {
-//    outColor = vec4(1.0, 0.0, 0.0, 1.0);
+    vec3 ambient = vec3(0.2);
 
-    outColor = vec4(texture(mosaic, texCoord).rgb, 1.0);
+    float NdotL = max(0, dot(normalize(light), normalize(normal)));
+    vec3 diffuse = vec3(NdotL * vec3(0.8));
+
+    vec3 finalColorIntensity = ambient + diffuse; // + specular
+    vec3 textureColor = texture(mosaic, texCoord).rgb;
+
+    outColor = vec4(finalColorIntensity * textureColor, 1.0);
 }

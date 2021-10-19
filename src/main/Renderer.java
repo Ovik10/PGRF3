@@ -19,21 +19,31 @@ import static org.lwjgl.opengl.GL20.*;
  */
 public class Renderer extends AbstractRenderer {
 
+    private double oldMx, oldMy;
+    private boolean mousePressed;
+
     private int shaderProgram;
     private OGLBuffers buffers;
 
-    private Camera camera;
+    private Camera camera, cameraLight;
     private Mat4 projection;
-    private int locView, locProjection;
+    private int locView, locProjection, locSolid, locLightPosition;
     private OGLTexture2D mosaicTexture;
 
     @Override
     public void init() {
+        OGLUtils.printOGLparameters();
+        OGLUtils.printLWJLparameters();
+        OGLUtils.printJAVAparameters();
+        OGLUtils.shaderCheck();
+
         glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
         shaderProgram = ShaderUtils.loadProgram("/start");
 
         locView = glGetUniformLocation(shaderProgram, "view");
         locProjection = glGetUniformLocation(shaderProgram, "projection");
+        locSolid = glGetUniformLocation(shaderProgram, "solid");
+        locLightPosition = glGetUniformLocation(shaderProgram, "lightPosition");
 
         buffers = GridFactory.createGrid(200, 200);
 
@@ -55,6 +65,8 @@ public class Renderer extends AbstractRenderer {
 
         textRenderer = new OGLTextRenderer(width, height);
 
+        cameraLight = new Camera().withPosition(new Vec3D(5, 0, 0));
+
         try {
             mosaicTexture = new OGLTexture2D("textures/mosaic.jpg");
         } catch (IOException e) {
@@ -72,9 +84,15 @@ public class Renderer extends AbstractRenderer {
         glUniformMatrix4fv(locView, false, camera.getViewMatrix().floatArray());
         glUniformMatrix4fv(locProjection, false, projection.floatArray());
 
+        glUniform3fv(locLightPosition, ToFloatArray.convert(cameraLight.getPosition()));
+
         mosaicTexture.bind(shaderProgram, "mosaic", 0);
 
+        glUniform1i(locSolid, 1);
         buffers.draw(GL_TRIANGLES, shaderProgram);
+
+//        glUniform1i(locSolid, 2);
+//        buffers.draw(GL_TRIANGLES, shaderProgram);
 
         textRenderer.addStr2D(width - 90, height - 3, "PGRF");
     }
@@ -93,9 +111,6 @@ public class Renderer extends AbstractRenderer {
     public GLFWKeyCallback getKeyCallback() {
         return keyCallback;
     }
-
-    private double oldMx, oldMy;
-    private boolean mousePressed;
 
     private final GLFWCursorPosCallback cursorPosCallback = new GLFWCursorPosCallback() {
         @Override
