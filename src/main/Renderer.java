@@ -11,6 +11,8 @@ import java.io.IOException;
 import static org.lwjgl.glfw.GLFW.*;
 import static org.lwjgl.opengl.GL11.*;
 import static org.lwjgl.opengl.GL20.*;
+import static org.lwjgl.opengl.GL30.GL_FRAMEBUFFER;
+import static org.lwjgl.opengl.GL30.glBindFramebuffer;
 
 /**
  * @author PGRF FIM UHK
@@ -24,11 +26,13 @@ public class Renderer extends AbstractRenderer {
 
     private int shaderProgram;
     private OGLBuffers buffers;
+    private OGLRenderTarget renderTarget;
 
     private Camera camera, cameraLight;
     private Mat4 projection;
-    private int locView, locProjection, locSolid, locLightPosition;
+    private int locView, locProjection, locSolid, locLightPosition, locEyePosition;
     private OGLTexture2D mosaicTexture;
+    private OGLTexture.Viewer viewer;
 
     @Override
     public void init() {
@@ -44,8 +48,11 @@ public class Renderer extends AbstractRenderer {
         locProjection = glGetUniformLocation(shaderProgram, "projection");
         locSolid = glGetUniformLocation(shaderProgram, "solid");
         locLightPosition = glGetUniformLocation(shaderProgram, "lightPosition");
+        locEyePosition = glGetUniformLocation(shaderProgram, "eyePosition");
 
         buffers = GridFactory.createGrid(200, 200);
+        renderTarget = new OGLRenderTarget(1024, 1024);
+        viewer = new OGLTexture2D.Viewer();
 
 //        view = new Mat4ViewRH();
 //        camera = new Camera(
@@ -56,16 +63,16 @@ public class Renderer extends AbstractRenderer {
 //                true
 //        );
         camera = new Camera()
-                .withPosition(new Vec3D(3, 3, 2))
-                .withAzimuth(5 / 4f * Math.PI)
-                .withZenith(-1 / 5f * Math.PI);
+                .withPosition(new Vec3D(-3, 3, 3))
+                .withAzimuth(-1 / 4f * Math.PI) // 7 / 4f * Math.PI
+                .withZenith(-1.3 / 5f * Math.PI);
 
         projection = new Mat4PerspRH(Math.PI / 3, 600 / 800f, 1.0, 20.0);
 //        projection = new Mat4OrthoRH();
 
         textRenderer = new OGLTextRenderer(width, height);
 
-        cameraLight = new Camera().withPosition(new Vec3D(5, 0, 0));
+        cameraLight = new Camera().withPosition(new Vec3D(5, 5, 5));
 
         try {
             mosaicTexture = new OGLTexture2D("textures/mosaic.jpg");
@@ -77,22 +84,33 @@ public class Renderer extends AbstractRenderer {
     @Override
     public void display() {
         glUseProgram(shaderProgram);
+        renderTarget.bind();
         glEnable(GL_DEPTH_TEST);
-        glViewport(0, 0, width, height);
+        glClearColor(0.5f, 0f, 0f, 1f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         glUniformMatrix4fv(locView, false, camera.getViewMatrix().floatArray());
         glUniformMatrix4fv(locProjection, false, projection.floatArray());
 
         glUniform3fv(locLightPosition, ToFloatArray.convert(cameraLight.getPosition()));
+        glUniform3fv(locEyePosition, ToFloatArray.convert(camera.getEye()));
 
         mosaicTexture.bind(shaderProgram, "mosaic", 0);
 
         glUniform1i(locSolid, 1);
         buffers.draw(GL_TRIANGLES, shaderProgram);
 
-//        glUniform1i(locSolid, 2);
-//        buffers.draw(GL_TRIANGLES, shaderProgram);
+        glUniform1i(locSolid, 2);
+        buffers.draw(GL_TRIANGLES, shaderProgram);
+
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        glViewport(0, 0, width, height);
+        glClearColor(0f, 0.5f, 0f, 1f);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        viewer.view(renderTarget.getColorTexture(), -1.0, -1.0, 0.7);
+        viewer.view(renderTarget.getDepthTexture(), -1.0, -0.3, 0.7);
+//        viewer.view(mosaicTexture, -1.0, -1.0, 0.5);
 
         textRenderer.addStr2D(width - 90, height - 3, "PGRF");
     }

@@ -6,10 +6,12 @@ uniform mat4 projection;
 
 uniform int solid;
 uniform vec3 lightPosition;
+uniform vec3 eyePosition;
 
 out vec2 texCoord;
 out vec3 normal;
 out vec3 light;
+out vec3 viewDirection;
 
 const float PI = 3.14159;
 
@@ -73,4 +75,5 @@ void main() {
     gl_Position = projection * view * vec4(pos3, 1.0);
 
     light = lightPosition - pos3;
+    viewDirection = eyePosition - pos3;
 } 
