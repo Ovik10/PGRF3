@@ -31,7 +31,7 @@ public class Renderer extends AbstractRenderer {
     private Camera camera, cameraLight;
     private Mat4 projection;
 
-    private int locView, locProjection, locSolid, locLightPosition, locEyePosition;
+    private int locView, locProjection, locSolid, locLightPosition, locEyePosition, locLightVP;
     private int locViewLight, locProjectionLight, locSolidLight;
 
     private OGLTexture2D mosaicTexture;
@@ -53,6 +53,7 @@ public class Renderer extends AbstractRenderer {
         locSolid = glGetUniformLocation(shaderProgramViewer, "solid");
         locLightPosition = glGetUniformLocation(shaderProgramViewer, "lightPosition");
         locEyePosition = glGetUniformLocation(shaderProgramViewer, "eyePosition");
+        locLightVP = glGetUniformLocation(shaderProgramViewer, "lightVP");
 
         locViewLight = glGetUniformLocation(shaderProgramLight, "view");
         locProjectionLight = glGetUniformLocation(shaderProgramLight, "projection");
@@ -95,6 +96,7 @@ public class Renderer extends AbstractRenderer {
     @Override
     public void display() {
         glEnable(GL_DEPTH_TEST); // zapnout z-buffer (kvůli TextRendereru)
+//        cameraLight = cameraLight.left(0.01);
 
         renderFromLight();
         renderFromViewer();
@@ -136,10 +138,12 @@ public class Renderer extends AbstractRenderer {
 
         glUniformMatrix4fv(locView, false, camera.getViewMatrix().floatArray());
         glUniformMatrix4fv(locProjection, false, projection.floatArray());
+        glUniformMatrix4fv(locLightVP, false, cameraLight.getViewMatrix().mul(projection).floatArray());
 
         glUniform3fv(locLightPosition, ToFloatArray.convert(cameraLight.getPosition()));
         glUniform3fv(locEyePosition, ToFloatArray.convert(camera.getEye()));
 
+        renderTarget.getDepthTexture().bind(shaderProgramViewer, "depthTexture", 1);
         mosaicTexture.bind(shaderProgramViewer, "mosaic", 0);
 
         glUniform1i(locSolid, 1);

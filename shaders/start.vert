@@ -3,6 +3,7 @@ in vec2 inPosition; // input from the vertex buffer
 
 uniform mat4 view;
 uniform mat4 projection;
+uniform mat4 lightVP; // light view-projection
 
 uniform int solid;
 uniform vec3 lightPosition;
@@ -12,6 +13,7 @@ out vec2 texCoord;
 out vec3 normal;
 out vec3 light;
 out vec3 viewDirection;
+out vec4 depthTextureCoord;
 
 const float PI = 3.14159;
 
@@ -76,4 +78,11 @@ void main() {
 
     light = lightPosition - pos3;
     viewDirection = eyePosition - pos3;
+
+    depthTextureCoord = lightVP * vec4(pos3, 1.0); // získáváme pozici vrcholu tak, jak ten vrchol vidělo (vidí) světlo
+    // XY jako souřadnice v obrazovce a Z jako vzdálenost od pozorovatele (v tomto případě světla)
+    depthTextureCoord.xyz = depthTextureCoord.xyz / depthTextureCoord.w; // nutná dehomogenizace
+    // obrazovka je <-1;1>
+    // textura je <0;1>
+    depthTextureCoord.xyz = (depthTextureCoord.xyz + 1) / 2;
 } 
