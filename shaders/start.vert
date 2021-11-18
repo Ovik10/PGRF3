@@ -61,19 +61,6 @@ vec3 getElephantHead(vec2 vec) {
     return vec3(x, y, z);
 }
 
-// mašle - sfericke souradnice
-vec3 getBow(vec2 vec) {
-    float azimut =  sqrt(vec.x * 1);
-    float zenit = vec.y * 3.14;
-    float r = 1+2*sin(4*zenit);
-
-    float x = r*cos(azimut)*cos(zenit);
-    float y = r*sin(azimut)*cos(zenit);
-    float z = r*sin(zenit);
-
-    return vec3(x, y, z);
-}
-
 
 // koule - zdroj svetla
 vec3 getSphere(vec2 vec) {
@@ -100,7 +87,7 @@ vec3 getNormal(vec2 xy){
 void main() {
     posIO = inPosition;
     vec2 position = inPosition -  0.5;
-    if (lightModelType == 0) { // blinn-phong
+    if (lightModelType == 0) { // blinn-phong model
         // rozdeleni objektu
         if (objectType < 2) {
             // vypocet z
