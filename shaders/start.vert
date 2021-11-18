@@ -1,88 +1,133 @@
 #version 150
-in vec2 inPosition; // input from the vertex buffer
-
+in vec2 inPosition;
+out float intensity;
+out vec2 posIO;
+out vec3 normalIO;
+out vec3 lightDir;
+out vec3 viewDir;
+out vec3 vertColor;
+out vec4 objPos;
+uniform vec3 lightPos;
+uniform vec3 viewPos;
+uniform mat4 model;
 uniform mat4 view;
-uniform mat4 projection;
-uniform mat4 lightVP; // light view-projection
+uniform mat4 proj;
+uniform int objectType;
+uniform int lightModelType;
+uniform float time;
 
-uniform int solid;
-uniform vec3 lightPosition;
-uniform vec3 eyePosition;
+// getter pro z hodnotu
+float getFValue(vec2 vec){
+    if (objectType==0) { //pro desku
+        return 0;
+    } else { //pro raketu
+        return -(vec.x*vec.x*5+vec.y*vec.y*5);
+    }
+}
 
-out vec2 texCoord;
-out vec3 normal;
-out vec3 light;
-out vec3 viewDirection;
-out vec4 depthTextureCoord;
+// kuzel - kartezske souradnice
+vec3 getCone(vec2 vec) {
+    float t = sqrt(vec.x * 1);
+    float s = vec.y * 2 * 3.14;
 
-const float PI = 3.14159;
+    float x = t*cos(s);
+    float y = t*sin(s);
+    float z = t;
 
-vec3 getSphere(vec2 pos) {
-    float az = pos.x * PI; // souřadnice X je <-1; 1> a chceme v rozsahu <-PI; PI>
-    float ze = pos.y * PI / 2; // souřadnice Y je <-1; 1> a chceme v rozsahu <-PI/2; PI/2>
-    float r = 1;
+    return vec3(x, y, z);
+}
+// sombrero - cylindricke souradnice
+vec3 getSombrero(vec2 vec) {
+    float azimut = vec.x * 2 * 3.14;
+    float r = vec.y * 2 * 3.14;
+    float v = 2 * sin(r);
 
-    float x = r * cos(az) * cos(ze);
-    float y = 2 * r * sin(az) * cos(ze);
-    float z = 0.5 * r * sin(ze);
+    float x = r * cos(azimut);
+    float y = r * sin(azimut);
+    float z = v;
+
+    return vec3(x, y, z);
+}
+// sloni hlava - sfericke souradnice
+vec3 getElephantHead(vec2 vec) {
+    float azimut = vec.x * 2 * 3.14;
+    float zenit = vec.y * 3.14;
+    float r = 3+cos(4*azimut);
+
+    float x = r*cos(azimut)*cos(zenit);
+    float y = r*sin(azimut)*cos(zenit);
+    float z = r*sin(zenit);
 
     return vec3(x, y, z);
 }
 
-vec3 getSphereNormalWithDerivation(vec2 pos) {
-    // x = cos(x * PI) * cos(y * PI / 2)
-    // y = 2 * sin(x * PI) * cos(y * PI / 2)
-    // z = 0.5 * sin(y * PI / 2)
-    float az = pos.x * PI;
-    float ze = pos.y * PI / 2;
+// mašle - sfericke souradnice
+vec3 getBow(vec2 vec) {
+    float azimut =  sqrt(vec.x * 1);
+    float zenit = vec.y * 3.14;
+    float r = 1+2*sin(4*zenit);
 
-    vec3 u = vec3(-sin(az) * cos(ze) * PI, cos(az) * cos(ze) * PI, 0);
-    vec3 v = vec3(cos(az) * -sin(ze) * PI / 2, sin(az) * -sin(ze) * PI / 2, cos(ze) * PI / 2);
+    float x = r*cos(azimut)*cos(zenit);
+    float y = r*sin(azimut)*cos(zenit);
+    float z = r*sin(zenit);
+
+    return vec3(x, y, z);
+}
+
+
+// koule - zdroj svetla
+vec3 getSphere(vec2 vec) {
+    float azimut = vec.x * 3.14 *2;
+    float zenit = vec.y * 3.14;
+    float r = 1;
+
+    float x = r*cos(azimut)*cos(zenit);
+    float y = r*sin(azimut)*cos(zenit);
+    float z = r*sin(zenit);
+
+    return vec3(x, y, z);
+}
+
+vec3 getNormal(vec2 xy){
+    float delta = 0.01;
+    vec3 u = vec3(xy.x + delta, xy.y, getFValue(xy + vec2(delta, 0)))
+    - vec3(xy - vec2(delta, 0), getFValue(xy - vec2(delta, 0)));
+    vec3 v = vec3(xy + vec2(0, delta), getFValue(xy + vec2(0, delta)))
+    - vec3(xy - vec2(0, delta), getFValue(xy - vec2(0, delta)));
     return cross(u, v);
-}
-
-vec3 getSphereNormal(vec2 pos) {
-    vec3 u = getSphere(pos + vec2(0.001, 0)) - getSphere(pos - vec2(0.001, 0));
-    vec3 v = getSphere(pos + vec2(0, 0.001)) - getSphere(pos - vec2(0, 0.001));
-    return cross(u, v);
-}
-
-vec3 getPlane(vec2 pos) {
-    return vec3(pos * 3.0, -1.0);
-}
-
-vec3 getPlaneNormal(vec2 pos) {
-    vec3 u = getPlane(pos + vec2(0.001, 0)) - getPlane(pos - vec2(0.001, 0));
-    vec3 v = getPlane(pos + vec2(0, 0.001)) - getPlane(pos - vec2(0, 0.001));
-    return cross(u, v);
-}
-
-float getZ(vec2 pos) {
-    return sin(pos.x * 5);
 }
 
 void main() {
-    vec2 position = inPosition * 2 - 1;// inPosition <0; 1> | position <-1; 1>
-    texCoord = inPosition;
-
-    vec3 pos3;
-    if (solid == 1) {
-        pos3 = getSphere(position);
-        normal = getSphereNormalWithDerivation(position);
-    } else if (solid == 2) {
-        pos3 = getPlane(position);
-        normal = getPlaneNormal(position);
+    posIO = inPosition;
+    vec2 position = inPosition -  0.5;
+    if (lightModelType == 0) { // blinn-phong
+        // rozdeleni objektu
+        if (objectType < 2) {
+            // vypocet z
+            float z = getFValue(position.xy);
+            objPos = vec4(position.x, position.y, z, 1.0);
+        } else if (objectType == 2) {
+            // vypocet xyz
+            objPos = vec4(getSphere(position), 1.0);
+        } else if (objectType == 3) {
+            objPos = vec4(getCone(position), 1.0);
+        } else if (objectType == 4) {
+            objPos = vec4(getElephantHead(position), 1.0);
+        } else if (objectType == 5){
+            objPos = vec4(getBow(position), 1.0);
+        } else if (objectType == 6){
+            objPos = vec4(getSombrero(inPosition), 1.0);
+        } else if (objectType == 7) {
+            objPos = vec4(getSpiral(position), 1.0);
+        }
+    } else { // per vertex a per pixel
+        if (objectType == 8) {
+            objPos = vec4(getSphere(position), 1.0);
+        } else if (objectType == 9) {
+            objPos = vec4(getSphere(position), 1.0);
+        }
     }
+    objPos = model * objPos;// modelova transformace
 
-    gl_Position = projection * view * vec4(pos3, 1.0);
 
-    light = lightPosition - pos3;
-    viewDirection = eyePosition - pos3;
-
-    depthTextureCoord = lightVP * vec4(pos3, 1.0); // získáváme pozici vrcholu tak, jak ten vrchol vidělo (vidí) světlo
-    // XY jako souřadnice v obrazovce a Z jako vzdálenost od pozorovatele (v tomto případě světla)
-    depthTextureCoord.xyz = depthTextureCoord.xyz / depthTextureCoord.w; // nutná dehomogenizace
-    // obrazovka je <-1;1>
-    // textura je <0;1>
-    depthTextureCoord.xyz = (depthTextureCoord.xyz + 1) / 2;
-} 
+}
