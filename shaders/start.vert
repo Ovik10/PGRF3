@@ -60,6 +60,19 @@ vec3 getElephantHead(vec2 vec) {
 
     return vec3(x, y, z);
 }
+// polokoule - sfericke souradnice
+     vec3 getTrampoline(vec2 vec){
+         float z = vec.x * 3.14;
+         float az = vec.y * 3.14;
+         float r = 2 + sin(z + az);
+
+         float x = sin(z)*cos(az);
+         float y = sin(az)*sin(z);
+         float z = cos(z)*0.1*5;
+
+         return vec3(x, y, z);
+     }
+}
 
 
 // koule - zdroj svetla
@@ -101,11 +114,9 @@ void main() {
         } else if (objectType == 4) {
             objPos = vec4(getElephantHead(position), 1.0);
         } else if (objectType == 5){
-            objPos = vec4(getBow(position), 1.0);
+            objPos = vec4(getTrampoline(position), 1.0);
         } else if (objectType == 6){
             objPos = vec4(getSombrero(inPosition), 1.0);
-        } else if (objectType == 7) {
-            objPos = vec4(getSpiral(position), 1.0);
         }
     } else { // per vertex a per pixel
         if (objectType == 8) {
@@ -115,6 +126,35 @@ void main() {
         }
     }
     objPos = model * objPos;// modelova transformace
+
+     vec3 normal;
+        if (lightModelType == 0) { // blinn-phong vypocet vektoru pro světlo, vektor pohledu,vypocet, normalizace a transformace normaly
+            lightDir = normalize((mat3(view) * lightPos).xyz - (view * objPos).xyz);
+            viewDir = normalize((mat3(view) * viewPos).xyz - (view * objPos).xyz);
+            normal = normalize(getNormal(position.xy));
+            normal = inverse(transpose(mat3(view * model))) * normal;
+            normalIO = normal;
+
+    // per vertex
+        } else if (lightModelType == 1) {
+            normal = normalize(getNormal(position.xy));
+            normal = inverse(transpose(mat3(view * model))) * normal;
+            lightDir = normalize(lightPos - (view * objPos).xyz);
+            intensity = dot(lightDir, normal);
+            vertColor = vec3(normal.xyz);
+
+    // per pixel
+        } else if (lightModelType == 2)  {
+            normal = normalize(getNormal(position.xy));
+            normal = inverse(transpose(mat3(view * model))) * normal;
+            lightDir = normalize(lightPos - (view * objPos).xyz);
+            normalIO = normal;
+        }
+
+    // view + projekcni transformace
+        gl_Position = proj * view * objPos;
+    }
+
 
 
 }
