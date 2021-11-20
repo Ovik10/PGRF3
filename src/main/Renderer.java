@@ -312,7 +312,45 @@ public class Renderer extends AbstractRenderer {
         } else {
             glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
         }
+        switch (colorValue) {
+            case 0:
+                barva = "podle textury";
+                break;
+            case 1:
+                barva = "podle pozice";
+                break;
+            case 2:
+                barva = "podle normály";
+                break;
+            case 3:
+                barva = "podle pozice do textury";
+                break;
+            case 4:
+                barva = "červena";
+        }
 
+        switch (lightValue) {
+            case 0:
+                osvetleni = "blinn-phong";
+                break;
+            case 1:
+                osvetleni = "ambientni";
+                break;
+            case 2:
+                osvetleni = "difuzni";
+                break;
+            case 3:
+                osvetleni = "zrcadlove";
+                break;
+        }
+
+        String text1 = new String("[MOUSE] kamera,    [WSAD/CTRL/SHIFT] pohyb,    [T] drateny model,    [R] reflektor,   [C] prepinani barev,    Aktualni barva: " + barva);
+        String text2 = new String("[L] typ osvetleni:  " + osvetleni + "    [O] " + "ORTHO/PERSP");
+
+        textRenderer.clear();
+        textRenderer.addStr2D(5, 25, text1);
+        textRenderer.addStr2D(5, 50, text2);
+        textRenderer.addStr2D(width - 100, height - 5, "Jindřich Svoboda");
 
 
 
@@ -380,7 +418,7 @@ public class Renderer extends AbstractRenderer {
             }
         }
     };
-    // nastaveni ovladani pomoci tlacitek
+    // ovladani pomoci klavesy
     private GLFWKeyCallback keyCallback = new GLFWKeyCallback() {
         @Override
         public void invoke(long window, int key, int scancode, int action, int mods) {
@@ -411,21 +449,21 @@ public class Renderer extends AbstractRenderer {
                     case GLFW_KEY_SPACE:
                         camera = camera.withFirstPerson(!camera.getFirstPerson());
                         break;
-                    case GLFW_KEY_L: //nekonecne prepinani mezi blinn-phong, per vertex a per pixel
+                    case GLFW_KEY_L:
                         if (lightValue == 3) {
                             lightValue = 0;
                         } else {
                             lightValue++;
                         }
                         break;
-                    case GLFW_KEY_P: // prepinani mezi pohledy perp a ortho
+                    case GLFW_KEY_O: // prepinani mezi pohledy perspektivni a ortho
                         if (persp) {
                             persp = false;
                         } else {
                             persp = true;
                         }
                         break;
-                    case GLFW_KEY_K: //prepinani mezi vyplnenymi plochami a dratenym modelem
+                    case GLFW_KEY_T: // wire a solid
                         if (wireframe) {
                             wireframe = false;
                         } else {
