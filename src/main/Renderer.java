@@ -1,214 +1,386 @@
 package main;
 
+
 import lwjglutils.*;
-import org.lwjgl.glfw.GLFWCursorPosCallback;
-import org.lwjgl.glfw.GLFWKeyCallback;
-import org.lwjgl.glfw.GLFWMouseButtonCallback;
+import org.lwjgl.BufferUtils;
+import org.lwjgl.glfw.*;
 import transforms.*;
 
 import java.io.IOException;
+import java.nio.DoubleBuffer;
 
 import static org.lwjgl.glfw.GLFW.*;
 import static org.lwjgl.opengl.GL11.*;
 import static org.lwjgl.opengl.GL20.*;
-import static org.lwjgl.opengl.GL30.GL_FRAMEBUFFER;
-import static org.lwjgl.opengl.GL30.glBindFramebuffer;
+import static org.lwjgl.opengl.GL30.*;
 
-/**
- * @author PGRF FIM UHK
- * @version 2.0
- * @since 2019-09-02
- */
 public class Renderer extends AbstractRenderer {
 
-    private double oldMx, oldMy;
-    private boolean mousePressed, wireframe = false;
+    double ox, oy;
+    boolean mouseButton1, mouseButton2, wireframe = false;
     boolean persp = true;
 
-    private int shaderProgramViewer, shaderProgramLight;
-    private OGLBuffers buffers;
-    private OGLRenderTarget renderTarget;
+    OGLBuffers buffers;
+    OGLTexture2D texture;
+    OGLTexture.Viewer textureView;
+    OGLRenderTarget renderTarget;
 
-    float rotace = 0;
+    private double oldMx, oldMy;
+    private boolean mousePressed;
+
+    //promenne pro reflektorovy zdroj svetla
+    private int spotlight = 0;
+    private int locSpotlight;
+
+    //promenne pro okno
+    int width, height;
+
+    int locTime, locTimeLight, locMathModelView, locMathViewView, locMathProjView, shaderProgramLight, shaderProgramView,
+            locMathModelLight, locMathViewLight, locMathProjLight, locLightPos, locViewPos,
+            locMathMVPLight, locObjectType, locLightModelType, locLightModelTypeForLight, locObjectTypeForLight, locEyePosition, locColorType;
+    String barva, osvetleni;
+
+    float rotace1 = 0;
+    float rotace2 = 0;
     float time = 0;
+    Vec3D light = new Vec3D();
+    Mat4 matMVPLight = new Mat4Identity();
 
-    private Camera camera, cameraLight;
-    private Mat4 projection;
+    Camera camera = new Camera();
+    Mat4 projection = new Mat4PerspRH(Math.PI / 4, 1, 0.01, 100.0);
 
-    private int locView, locProjection, locSolid, locLightPosition, locEyePosition, locLightVP;
-    private int locViewLight, locProjectionLight, locSolidLight;
+    int lightValue = 0;
+    int colorValue = 0;
 
-    private OGLTexture2D mosaicTexture;
-    private OGLTexture.Viewer viewer;
+
+
+    private int locSceneView, locSceneProjection, locSceneTemp;
+
+
+    private OGLTexture2D texture1;
+    private OGLTexture2D.Viewer viewer;
+
+    // nastaveni resizovani okna
+    private GLFWWindowSizeCallback wsCallback = new GLFWWindowSizeCallback() {
+        @Override
+        public void invoke(long window, int w, int h) {
+            if (w > 0 && h > 0 &&
+                    (w != width || h != height)) {
+                width = w;
+                height = h;
+                projection = new Mat4PerspRH(Math.PI / 4, height / (double) width, 0.01, 100.0);
+                if (textRenderer != null)
+                    textRenderer.resize(width, height);
+            }
+        }
+    };
 
     @Override
     public void init() {
         OGLUtils.printOGLparameters();
         OGLUtils.printLWJLparameters();
         OGLUtils.printJAVAparameters();
-        OGLUtils.shaderCheck();
 
-        glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
-        shaderProgramViewer = ShaderUtils.loadProgram("/start");
-        shaderProgramLight = ShaderUtils.loadProgram("/light");
-
-        locView = glGetUniformLocation(shaderProgramViewer, "view");
-        locProjection = glGetUniformLocation(shaderProgramViewer, "projection");
-        locSolid = glGetUniformLocation(shaderProgramViewer, "solid");
-        locLightPosition = glGetUniformLocation(shaderProgramViewer, "lightPosition");
-        locEyePosition = glGetUniformLocation(shaderProgramViewer, "eyePosition");
-        locLightVP = glGetUniformLocation(shaderProgramViewer, "lightVP");
-
-        locViewLight = glGetUniformLocation(shaderProgramLight, "view");
-        locProjectionLight = glGetUniformLocation(shaderProgramLight, "projection");
-        locSolidLight = glGetUniformLocation(shaderProgramLight, "solid");
-
+        // nastaveni barvy clear color
+        glClearColor(0.8f, 0.8f, 0.8f, 1.0f);
+        // zavolani vytvoreni gridu (trida GridUtil)
         buffers = GridFactory.createGrid(200, 200);
-        renderTarget = new OGLRenderTarget(1024, 1024);
-        viewer = new OGLTexture2D.Viewer();
 
-//        view = new Mat4ViewRH();
-//        camera = new Camera(
-//                new Vec3D(6, 6, 5),
-//                5 / 4f * Math.PI, // -3 / 4f * Math.PI; 225 stupňů
-//                -1 / 5f * Math.PI, // -0.6 rad, -36 stupňů
-//                1.0,
-//                true
-//        );
-        camera = new Camera()
-                .withPosition(new Vec3D(-3, 3, 3))
-                .withAzimuth(-1 / 4f * Math.PI) // 7 / 4f * Math.PI
-                .withZenith(-1.3 / 5f * Math.PI);
+        // nacteni shader programu z resources casti projektu
+        shaderProgramView = ShaderUtils.loadProgram("/start.vert",
+                "/start.frag",
+                null, null, null, null);
+        shaderProgramLight = ShaderUtils.loadProgram("/light.vert",
+                "/light.frag",
+                null, null, null, null);
 
-        projection = new Mat4PerspRH(Math.PI / 3, 600 / 800f, 1.0, 20.0);
-//        projection = new Mat4OrthoRH();
+        glUseProgram(this.shaderProgramLight);
 
-        textRenderer = new OGLTextRenderer(width, height);
-
-        cameraLight = new Camera()
-                .withPosition(new Vec3D(6, 6, 6))
-                .withAzimuth(5 / 4f * Math.PI)
-                .withZenith(-1 / 5f * Math.PI);
-
+        // nacteni textury z resources casti projektu
         try {
-            mosaicTexture = new OGLTexture2D("textures/mosaic.jpg");
+            texture = new OGLTexture2D("textures/mosaic.jpg");
         } catch (IOException e) {
             e.printStackTrace();
         }
+
+
+        locMathModelLight = glGetUniformLocation(shaderProgramLight, "model");
+        locMathViewLight = glGetUniformLocation(shaderProgramLight, "view");
+        locMathProjLight = glGetUniformLocation(shaderProgramLight, "proj");
+        locObjectTypeForLight = glGetUniformLocation(shaderProgramLight, "objectType");
+        locTimeLight = glGetUniformLocation(shaderProgramLight, "time");
+        locLightModelTypeForLight = glGetUniformLocation(shaderProgramLight, "lightModelType");
+        locMathModelView = glGetUniformLocation(shaderProgramView, "model");
+        locMathViewView = glGetUniformLocation(shaderProgramView, "view");
+        locMathProjView = glGetUniformLocation(shaderProgramView, "proj");
+        locLightPos = glGetUniformLocation(shaderProgramView, "lightPos");
+        locEyePosition = glGetUniformLocation(shaderProgramView, "eyePosition");
+        locMathMVPLight = glGetUniformLocation(shaderProgramView, "matMVPLight");
+        locLightModelType = glGetUniformLocation(shaderProgramView, "lightModelType");
+        locColorType = glGetUniformLocation(shaderProgramView, "colorType");
+        locObjectType = glGetUniformLocation(shaderProgramView, "objectType");
+        locTime = glGetUniformLocation(shaderProgramView, "time");
+        locViewPos = glGetUniformLocation(shaderProgramView, "viewPos");
+        locSpotlight = glGetUniformLocation(shaderProgramView, "spotlight");
+
+        textRenderer = new OGLTextRenderer(width, height);
+
+        camera = camera.withPosition(new Vec3D(10, 10, 6))
+                .withAzimuth(Math.PI * 1.25)
+                .withZenith(Math.PI * -0.125);
+
+        textureView = new OGLTexture2D.Viewer();
+        renderTarget = new OGLRenderTarget(1024, 1024);
+        viewer = new OGLTexture2D.Viewer();
+
+
+
+        OGLUtils.printOGLparameters();
+        OGLUtils.printLWJLparameters();
+        OGLUtils.printJAVAparameters();
+        OGLUtils.shaderCheck();
+
+        textRenderer = new OGLTextRenderer(LwjglWindow.WIDTH, LwjglWindow.HEIGHT);
+
+
+        try {
+            texture1 = new OGLTexture2D("./textures/mosaic.jpg");
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+
+
+
     }
 
+    // vykreslení scény
     @Override
     public void display() {
-        glEnable(GL_DEPTH_TEST); // zapnout z-buffer (kvůli TextRendereru)
-//        cameraLight = cameraLight.left(0.01);
+        glEnable(GL_DEPTH_TEST);
+        glLineWidth(5);
+        time += 0.03;
+        // "podrzeni" sceny
+        if (!mouseButton1)
+            rotace1 += 0.03;
+        if (!mouseButton2)
+            rotace2 += 0.03;
 
-        renderFromLight();
-        renderFromViewer();
+        //----------------------------------------------------From Light
+        renderTarget.bind();
+        glClearColor(0.1f, 0.5f, 0.1f, 1f);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        glUniform1i(locLightModelTypeForLight, lightValue);
+        glUseProgram(shaderProgramLight);
 
-        viewer.view(renderTarget.getColorTexture(), -1.0, -1.0, 0.7);
-        viewer.view(renderTarget.getDepthTexture(), -1.0, -0.3, 0.7);
-//        viewer.view(mosaicTexture, -1.0, -1.0, 0.5);
+        light = new Vec3D(0, 0, 10).mul(new Mat3RotY(rotace2/2)).mul(new Mat3RotX(rotace2/2));
 
-        textRenderer.addStr2D(width - 90, height - 3, "Jindrich Svoboda");
+        glUniformMatrix4fv(locMathViewLight, false,
+                new Mat4ViewRH(light, light.mul(-1), new Vec3D(0, 1, 0)).floatArray());
+        glUniformMatrix4fv(locMathProjLight, false,
+                new Mat4OrthoRH(10, 10, 1, 20).floatArray());
+        glUniform1f(locTimeLight, time);
 
+        matMVPLight = new Mat4ViewRH(light, light.mul(-1), new Vec3D(0, 1, 0))
+                .mul(new Mat4OrthoRH(10, 10, 1, 20));
+
+        // rozdeleni objektu
+        glUniform1i(locObjectTypeForLight, 0); // plocha
+        glUniformMatrix4fv(locMathModelLight, false,
+                new Mat4Scale(15).floatArray());
+        buffers.draw(GL_TRIANGLE_STRIP, shaderProgramLight);
+
+        glUniform1i(locObjectTypeForLight, 1); // V
+        glUniformMatrix4fv(locMathModelLight, false,
+                new Mat4RotX(rotace1).mul(new Mat4Transl(4, 0, 2)).floatArray());
+        buffers.draw(GL_TRIANGLE_STRIP, shaderProgramLight);
+
+        glUniform1i(locObjectTypeForLight, 2); // kuzel
+        glUniformMatrix4fv(locMathModelLight, false,
+                new Mat4RotX(rotace1).mul(new Mat4Transl(-3, 0, 3)).floatArray());
+        buffers.draw(GL_TRIANGLE_STRIP, shaderProgramLight);
+
+        glUniform1i(locObjectTypeForLight, 3); // sloni hlava
+        glUniformMatrix4fv(locMathModelLight, false,
+                new Mat4RotX(rotace1).mul(new Mat4Transl(22, -15, 12)).mul(new Mat4Scale(0.20)).floatArray());
+        buffers.draw(GL_TRIANGLE_STRIP, shaderProgramLight);
+
+        glUniform1i(locObjectTypeForLight, 4); // polokoule
+        glUniformMatrix4fv(locMathModelLight, false,
+                new Mat4Transl(-12, 15, 8).mul(new Mat4Scale(0.15)).floatArray());
+        buffers.draw(GL_TRIANGLE_STRIP, shaderProgramLight);
+
+        glUniform1i(locObjectTypeForLight, 5); // sombrero
+        glUniformMatrix4fv(locMathModelLight, false,
+                new Mat4RotX(rotace1).mul(new Mat4Transl(-7, 10, 10)).mul(new Mat4Scale(0.1)).floatArray());
+        buffers.draw(GL_TRIANGLE_STRIP, shaderProgramLight);
+
+        glUniform1i(locObjectTypeForLight, 6); // donut
+        glUniformMatrix4fv(locMathModelLight, false,
+                new Mat4RotX(-rotace1).mul(new Mat4Transl(5, 0, 5)).mul(new Mat4Scale(0.15)).floatArray());
+        buffers.draw(GL_TRIANGLE_STRIP, shaderProgramLight);
+        //persepktivni a ortogonalni
         if (persp) {
             projection = new Mat4PerspRH(Math.PI / 4, 0.5, 0.01, 100.0);
         } else {
             projection = new Mat4OrthoRH(40, 20, 0.01, 100.0);
         }
+
+        // prepinani mezi dratovym modelem a vyplnenymi plochami
         if (wireframe) {
             glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
         } else {
             glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
         }
-    }
 
-    private void renderFromLight() {
-        glUseProgram(shaderProgramLight);
-        renderTarget.bind();
-        glClearColor(0.5f, 0f, 0f, 1f);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-        glUniformMatrix4fv(locViewLight, false, cameraLight.getViewMatrix().floatArray());
-        glUniformMatrix4fv(locProjectionLight, false, projection.floatArray());
-
-        glUniform1i(locSolidLight, 1);
-        buffers.draw(GL_TRIANGLES, shaderProgramLight);
-
-        glUniform1i(locSolidLight, 2);
-        buffers.draw(GL_TRIANGLES, shaderProgramLight);
-    }
-
-    private void renderFromViewer() {
-        glUseProgram(shaderProgramViewer);
-
-        // výchozí framebuffer - render do obrazovky
+        //----------------------------------------------------From View
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
-        // nutno opravit viewport, protože render target si nastavuje vlastní
         glViewport(0, 0, width, height);
-
-        glClearColor(0f, 0.5f, 0f, 1f);
+        glClearColor(0.5f, 0.1f, 0.1f, 1f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        glUseProgram(shaderProgramView);
 
-        glUniformMatrix4fv(locView, false, camera.getViewMatrix().floatArray());
-        glUniformMatrix4fv(locProjection, false, projection.floatArray());
-        glUniformMatrix4fv(locLightVP, false, cameraLight.getViewMatrix().mul(projection).floatArray());
-
-        glUniform3fv(locLightPosition, ToFloatArray.convert(cameraLight.getPosition()));
+        // poslani hodnot uniform promennych
+        glUniform1i(locLightModelType, lightValue);
+        glUniform1i(locColorType, colorValue);
+        glUniform1f(locTime, time);
+        glUniform3f(locLightPos, (float) light.getX(), (float) light.getY(), (float) light.getZ());
         glUniform3fv(locEyePosition, ToFloatArray.convert(camera.getEye()));
+        glUniform3f(locViewPos, (float) camera.getPosition().getX(), (float) camera.getPosition().getY(), (float) camera.getPosition().getZ());
+        glUniformMatrix4fv(locMathMVPLight, false,
+                matMVPLight.floatArray());
+        glUniformMatrix4fv(locMathViewView, false,
+                camera.getViewMatrix().floatArray());
+        glUniformMatrix4fv(locMathProjView, false,
+                projection.floatArray());
+        glUniform1i(locSpotlight, spotlight);
+        // nabindovani textury
+        texture.bind(shaderProgramView, "textureID", 0);
+        renderTarget.getDepthTexture().bind(shaderProgramView, "textureDepth", 1);
 
-        renderTarget.getDepthTexture().bind(shaderProgramViewer, "depthTexture", 1);
-        mosaicTexture.bind(shaderProgramViewer, "mosaic", 0);
+        // rozdeleni objektu
+        // Blinn-Phong objekty (prvni zobrazeni)
+        glUniform1i(locObjectType, 0); // plocha
+        glUniformMatrix4fv(locMathModelView, false,
+                new Mat4Scale(10).floatArray());
+        buffers.draw(GL_TRIANGLE_STRIP, shaderProgramView);
 
-        glUniform1i(locSolid, 1);
-        buffers.draw(GL_TRIANGLES, shaderProgramViewer);
+        glUniform1i(locObjectType, 1); // V
+        glUniformMatrix4fv(locMathModelView, false,
+                new Mat4RotX(rotace1).mul(new Mat4Transl(4, 0, 2)).floatArray());
+        buffers.draw(GL_TRIANGLE_STRIP, shaderProgramView);
 
-        glUniform1i(locSolid, 2);
-        buffers.draw(GL_TRIANGLES, shaderProgramViewer);
-    }
+        glUniform1i(locObjectType, 2); // koule - svetlo
+        glUniformMatrix4fv(locMathModelView, false,
+                new Mat4Transl(light).mul(new Mat4Scale(1)).floatArray());
+        buffers.draw(GL_TRIANGLE_STRIP, shaderProgramView);
 
-    @Override
-    public GLFWCursorPosCallback getCursorCallback() {
-        return cursorPosCallback;
-    }
+        glUniform1i(locObjectType, 3); // kuzel
+        glUniformMatrix4fv(locMathModelView, false,
+                new Mat4RotX(rotace1).mul(new Mat4Transl(-3, 0, 3)).floatArray());
+        buffers.draw(GL_TRIANGLE_STRIP, shaderProgramView);
 
-    @Override
-    public GLFWMouseButtonCallback getMouseCallback() {
-        return mouseButtonCallback;
-    }
+        glUniform1i(locObjectType, 4); // sloni hlava
+        glUniformMatrix4fv(locMathModelView, false,
+                new Mat4RotX(rotace1).mul(new Mat4Transl(22, -15, 12)).mul(new Mat4Scale(0.20)).floatArray());
+        buffers.draw(GL_TRIANGLE_STRIP, shaderProgramView);
 
-    @Override
-    public GLFWKeyCallback getKeyCallback() {
-        return keyCallback;
-    }
+        glUniform1i(locObjectType, 5); // polokoule
+        glUniformMatrix4fv(locMathModelView, false,
+                new Mat4Transl(-12, 15, 8).mul(new Mat4Scale(0.15)).floatArray());
+        buffers.draw(GL_TRIANGLE_STRIP, shaderProgramView);
 
-    private final GLFWCursorPosCallback cursorPosCallback = new GLFWCursorPosCallback() {
-        @Override
-        public void invoke(long window, double x, double y) {
-            if (mousePressed) {
-                camera = camera.addAzimuth(Math.PI * (oldMx - x) / LwjglWindow.WIDTH);
-                camera = camera.addZenith(Math.PI * (oldMy - y) / LwjglWindow.HEIGHT);
-                oldMx = x;
-                oldMy = y;
-            }
+        glUniform1i(locObjectType, 6); // sombrero
+        glUniformMatrix4fv(locMathModelView, false,
+                new Mat4RotX(rotace1).mul(new Mat4Transl(-7, 10, 10)).mul(new Mat4Scale(0.1)).floatArray());
+        buffers.draw(GL_TRIANGLE_STRIP, shaderProgramView);
+
+        glUniform1i(locObjectType, 7); // donut
+        glUniformMatrix4fv(locMathModelView, false,
+                new Mat4RotX(-rotace1).mul(new Mat4Transl(5, 0, 5)).mul(new Mat4Scale(0.15)).floatArray());
+        buffers.draw(GL_TRIANGLE_STRIP, shaderProgramView);
+
+
+        glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+
+        textureView.view(renderTarget.getColorTexture(), -1, -1, 0.5);
+        textureView.view(renderTarget.getDepthTexture(), -1, -0.5, 0.5);
+
+
+        if (wireframe) {
+            glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+        } else {
+            glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
         }
-    };
 
-    private final GLFWMouseButtonCallback mouseButtonCallback = new GLFWMouseButtonCallback() {
+
+
+
+    }
+    // ovladani pomoci mysi (odlisne ovladani pro pohyb nez u tlacitek)
+    private GLFWMouseButtonCallback mbCallback = new GLFWMouseButtonCallback() {
+        private final GLFWCursorPosCallback cursorPosCallback = new GLFWCursorPosCallback() {
+            @Override
+            public void invoke(long window, double x, double y) {
+                if (mousePressed) {
+                    camera = camera.addAzimuth(Math.PI * (oldMx - x) / LwjglWindow.WIDTH);
+                    camera = camera.addZenith(Math.PI * (oldMy - y) / LwjglWindow.HEIGHT);
+                    oldMx = x;
+                    oldMy = y;
+                }
+            }
+        };
+
+
         @Override
         public void invoke(long window, int button, int action, int mods) {
-            if (button == GLFW_MOUSE_BUTTON_LEFT) {
+            mouseButton1 = glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_1) == GLFW_PRESS;
+            mouseButton2 = glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_2) == GLFW_PRESS;
+
+            if (button == GLFW_MOUSE_BUTTON_1 && action == GLFW_PRESS) {
+                mouseButton1 = true;
+                DoubleBuffer xBuffer = BufferUtils.createDoubleBuffer(1);
+                DoubleBuffer yBuffer = BufferUtils.createDoubleBuffer(1);
+                glfwGetCursorPos(window, xBuffer, yBuffer);
+                ox = xBuffer.get(0);
+                oy = yBuffer.get(0);
                 double[] xPos = new double[1];
                 double[] yPos = new double[1];
                 glfwGetCursorPos(window, xPos, yPos);
                 oldMx = xPos[0];
                 oldMy = yPos[0];
-                mousePressed = (action == GLFW_PRESS);
+                mousePressed = action == GLFW_PRESS;
+
             }
+
+            if (button == GLFW_MOUSE_BUTTON_1 && action == GLFW_RELEASE) {
+                mouseButton1 = false;
+                DoubleBuffer xBuffer = BufferUtils.createDoubleBuffer(1);
+                DoubleBuffer yBuffer = BufferUtils.createDoubleBuffer(1);
+                glfwGetCursorPos(window, xBuffer, yBuffer);
+                double x = xBuffer.get(0);
+                double y = yBuffer.get(0);
+                camera = camera.addAzimuth((double) Math.PI * (ox - x) / width)
+                        .addZenith((double) Math.PI * (oy - y) / width);
+                ox = x;
+                oy = y;
+            }
+
         }
     };
 
+    private GLFWCursorPosCallback cpCallbacknew = new GLFWCursorPosCallback() {
+        @Override
+        public void invoke(long window, double x, double y) {
+            if (mouseButton1) {
+                camera = camera.addAzimuth((double) Math.PI * (ox - x) / width)
+                        .addZenith((double) Math.PI * (oy - y) / width);
+                ox = x;
+                oy = y;
+            }
+        }
+    };
+    // nastaveni ovladani pomoci tlacitek
     private GLFWKeyCallback keyCallback = new GLFWKeyCallback() {
         @Override
         public void invoke(long window, int key, int scancode, int action, int mods) {
@@ -239,8 +411,12 @@ public class Renderer extends AbstractRenderer {
                     case GLFW_KEY_SPACE:
                         camera = camera.withFirstPerson(!camera.getFirstPerson());
                         break;
-                    case GLFW_KEY_R:
-                        camera = camera.mulRadius(0.9f);
+                    case GLFW_KEY_L: //nekonecne prepinani mezi blinn-phong, per vertex a per pixel
+                        if (lightValue == 3) {
+                            lightValue = 0;
+                        } else {
+                            lightValue++;
+                        }
                         break;
                     case GLFW_KEY_P: // prepinani mezi pohledy perp a ortho
                         if (persp) {
@@ -256,8 +432,52 @@ public class Renderer extends AbstractRenderer {
                             wireframe = true;
                         }
                         break;
+                    case GLFW_KEY_R:
+                        if (spotlight == 1) {
+                            spotlight = 0;
+                        } else {
+                            spotlight = 1;
+                        }
+                        break;
+                    case GLFW_KEY_C: // prepinani barev
+                        if (colorValue == 4) {
+                            colorValue = 0;
+                        } else {
+                            colorValue++;
+                        }
+                        break;
                 }
             }
         }
     };
+
+    @Override
+    public GLFWKeyCallback getKeyCallback() {
+        return keyCallback;
+    }
+
+    @Override
+    public GLFWWindowSizeCallback getWsCallback() {
+        return wsCallback;
+    }
+
+    @Override
+    public GLFWMouseButtonCallback getMouseCallback() {
+        return mbCallback;
+    }
+
+    @Override
+    public GLFWCursorPosCallback getCursorCallback() {
+        return cpCallbacknew;
+    }
+
+
 }
+
+
+
+
+
+
+
+
