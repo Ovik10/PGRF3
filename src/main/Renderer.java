@@ -22,11 +22,15 @@ import static org.lwjgl.opengl.GL30.glBindFramebuffer;
 public class Renderer extends AbstractRenderer {
 
     private double oldMx, oldMy;
-    private boolean mousePressed;
+    private boolean mousePressed, wireframe = false;
+    boolean persp = true;
 
     private int shaderProgramViewer, shaderProgramLight;
     private OGLBuffers buffers;
     private OGLRenderTarget renderTarget;
+
+    float rotace = 0;
+    float time = 0;
 
     private Camera camera, cameraLight;
     private Mat4 projection;
@@ -105,7 +109,18 @@ public class Renderer extends AbstractRenderer {
         viewer.view(renderTarget.getDepthTexture(), -1.0, -0.3, 0.7);
 //        viewer.view(mosaicTexture, -1.0, -1.0, 0.5);
 
-        textRenderer.addStr2D(width - 90, height - 3, "PGRF");
+        textRenderer.addStr2D(width - 90, height - 3, "Jindrich Svoboda");
+
+        if (persp) {
+            projection = new Mat4PerspRH(Math.PI / 4, 0.5, 0.01, 100.0);
+        } else {
+            projection = new Mat4OrthoRH(40, 20, 0.01, 100.0);
+        }
+        if (wireframe) {
+            glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+        } else {
+            glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+        }
     }
 
     private void renderFromLight() {
@@ -194,17 +209,53 @@ public class Renderer extends AbstractRenderer {
         }
     };
 
-    private final GLFWKeyCallback keyCallback = new GLFWKeyCallback() {
+    private GLFWKeyCallback keyCallback = new GLFWKeyCallback() {
         @Override
         public void invoke(long window, int key, int scancode, int action, int mods) {
+            if (key == GLFW_KEY_ESCAPE && action == GLFW_RELEASE)
+                glfwSetWindowShouldClose(window, true);
             if (action == GLFW_PRESS || action == GLFW_REPEAT) {
                 switch (key) {
-                    case GLFW_KEY_A -> camera = camera.left(0.1);
-                    case GLFW_KEY_D -> camera = camera.right(0.1);
-                    case GLFW_KEY_W -> camera = camera.forward(0.1);
-                    case GLFW_KEY_S -> camera = camera.backward(0.1);
-                    case GLFW_KEY_R -> camera = camera.up(0.1);
-                    case GLFW_KEY_F -> camera = camera.down(0.1);
+                    case GLFW_KEY_W:
+                        camera = camera.forward(1);
+                        break;
+                    case GLFW_KEY_D:
+                        camera = camera.right(1);
+                        break;
+                    case GLFW_KEY_S:
+                        camera = camera.backward(1);
+                        break;
+                    case GLFW_KEY_A:
+                        camera = camera.left(1);
+                        break;
+                    case GLFW_KEY_LEFT_CONTROL:
+
+                        camera = camera.down(1);
+                        break;
+                    case GLFW_KEY_LEFT_SHIFT:
+
+                        camera = camera.up(1);
+                        break;
+                    case GLFW_KEY_SPACE:
+                        camera = camera.withFirstPerson(!camera.getFirstPerson());
+                        break;
+                    case GLFW_KEY_R:
+                        camera = camera.mulRadius(0.9f);
+                        break;
+                    case GLFW_KEY_P: // prepinani mezi pohledy perp a ortho
+                        if (persp) {
+                            persp = false;
+                        } else {
+                            persp = true;
+                        }
+                        break;
+                    case GLFW_KEY_K: //prepinani mezi vyplnenymi plochami a dratenym modelem
+                        if (wireframe) {
+                            wireframe = false;
+                        } else {
+                            wireframe = true;
+                        }
+                        break;
                 }
             }
         }

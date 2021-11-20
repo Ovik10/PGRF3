@@ -6,32 +6,89 @@ uniform mat4 proj;
 uniform int objectType;
 uniform int lightModelType;
 uniform float time;
-out vec4 pos;
+uniform mat4 mLight;
+uniform mat4 vLight;
+uniform mat4 pLight;
+out vec4 vertPos;
+const float PI = 3.1415926;
 
-// getter pro z hodnotu
-float getFValue(vec2 vec){
-    if (objectType==0) {
-        return 0;
-    } else {
-        return -(vec.x*vec.x*5+vec.y*vec.y*5);
-    }
-}
 
-// kuzel - kartezske souradnice
+
+// kuzel
 vec3 getCone(vec2 vec) {
-    float t = sqrt(vec.x * 1);
-    float s = vec.y * 2 * 3.14;
-    float x = t*cos(s);
+float x, y, z;
+if (time < 30) {
+    float t = sqrt(vec.x * 1)* time/30;
+    float s = vec.y * 2 * PI* time/30;
+
+    float x = t*cos(s) + time/10;
     float y = t*sin(s);
     float z = t;
 
     return vec3(x, y, z);
+    } else {
+    float t = sqrt(vec.x * 1);
+        float s = vec.y * 2 * PI;
+
+        float x = t*cos(s)+time/10;
+        float y = t*sin(s);
+        float z = t;
+
+        return vec3(x, y, z);
+    }
 }
 
-// sombrero - cylindricke souradnice
+// sloni hlava
+vec3 getElephantHead(vec2 vec) {
+float x, y, z;
+ if (time < 30) {
+    float azimut = vec.x * 2 * PI * time/30;
+    float zenit = vec.y * PI * time/30;
+    float r = 3+cos(4*azimut);
+
+    float x = r*cos(azimut)*cos(zenit);
+    float y = r*sin(azimut)*cos(zenit);
+    float z = r*sin(zenit);
+        return vec3(x, y, z);
+
+   } else {
+    float azimut = vec.x * 2 * PI;
+        float zenit = vec.y * PI;
+        float r = 3+cos(4*azimut);
+
+        float x = r*cos(azimut)*cos(zenit);
+        float y = r*sin(azimut)*cos(zenit);
+        float z = r*sin(zenit);
+        return vec3(x, y, z);
+}
+}
+// V
+float getFValue(vec2 z){
+    if (objectType==0) {
+        return 0;
+    } else {
+        return -(z.x*z.x*3+z.y*z.y*3);
+    }
+}
+
+// polokoule
+vec3 getTrampoline(vec2 xy){
+    float zenit = xy.x * PI;
+    float azimut = xy.y * PI;
+    float r = 2 + sin(zenit + azimut)*10;
+
+    float x = sin(zenit)*cos(azimut);
+    float y = sin(azimut)*sin(zenit);
+    float z = cos(zenit)*0.1*5;
+
+    return vec3(x*3, y*3, z*3);
+}
+
+
+// sombrero
 vec3 getSombrero(vec2 vec) {
-    float az = vec.x * 2 * 3.14;
-    float r = vec.y * 2 * 3.14;
+    float az = vec.x * 2 * PI;
+    float r = vec.y * 2 * PI;
     float v = 2 * sin(r);
 
     float x = r * cos(az);
@@ -41,36 +98,23 @@ vec3 getSombrero(vec2 vec) {
     return vec3(x, y, z);
 }
 
-// sloni hlava - sfericke souradnice
-vec3 getElephantHead(vec2 vec) {
-    float az = vec.x * 2 * 3.14;
-    float ze = vec.y * 3.14;
-    float r = 3+cos(4*az);
 
-    float x = r*cos(az)*cos(ze);
-    float y = r*sin(az)*cos(ze);
-    float z = r*sin(ze);
+// Donut
+vec3 getDonut(vec2 vec) {
+    	float zenit = vec.x * 2.0 * PI;
+    	float azimut = vec.y * 2.0 * PI;
 
-    return vec3(x, y, z);
+    	float x = 3 * cos(azimut)+cos(zenit)*cos(azimut);
+    	float y = 3 * sin(azimut)+cos(zenit)*sin(azimut);
+    	float z = sin(zenit);
+
+    	return vec3(x, y, z);
 }
 
-// polokoule - sfericke souradnice
-vec3 getTrampoline(vec2 vec){
-    float z = vec.x * 3.14;
-    float az = vec.y * 3.14;
-    float r = 2 + sin(z + az);
-
-    float x = sin(z)*cos(az);
-    float y = sin(az)*sin(z);
-    float z = cos(z)*0.1*5;
-
-    return vec3(x, y, z);
-}
-
-// koule - osvetleni
+// koule - svetlo
 vec3 getSphere(vec2 vec) {
-    float az = vec.x * 3.14 *2;
-    float ze = vec.y * 3.14;
+    float az = vec.x * PI *2;
+    float ze = vec.y * PI;
     float r = 1;
 
     float x = r*cos(az)*cos(ze);
@@ -81,28 +125,26 @@ vec3 getSphere(vec2 vec) {
 }
 
 void main() {
-    vec2 position = inPosition-0.5;
-    if (lightModelType == 0) { // blinn-phong
+    // prirazeni objektu
+    vec2 position = inPosition*2-1;
         if (objectType < 2) {
-            // vypocet z
             float z = getFValue(position.xy);
-            pos = vec4(position.x, position.y, z, 1.0);
+            vertPos = vec4(position.x, position.y, z, 1.0);
         } else if (objectType == 2) {
-            // vypocet x, y, z
-            pos = vec4(getCone(position), 1.0);
+            vertPos = vec4(getCone(position), 1.0);
         } else if (objectType == 3) {
-            pos = vec4(getElephantHead(position), 1.0);
+            vertPos = vec4(getElephantHead(position), 1.0);
         } else if (objectType == 4) {
-            pos = vec4(getTrampoline(position), 1.0);
+            vertPos = vec4(getTrampoline(position), 1.0);
         } else if (objectType == 5){
-            pos = vec4(getSombrero(inPosition), 1.0);
+            vertPos = vec4(getSombrero(inPosition), 1.0);
+        } else if (objectType == 6){
+            vertPos = vec4(getDonut(position), 1.0);
         }
-    } else { // per vertex a per pixel
-        if (objectType == 7) {
-            pos = vec4(getSphere(position), 1.0);
-        }
-    }
-    // model view projekcni transformace
-    gl_Position = proj*view*model*pos;
-    pos = proj*view*model*pos;
+
+    // „normální“ transformace do NDC z pozice kamery
+    gl_Position = proj*view*model*vertPos;
+
+    // Transformace s pohledu zdroje světla
+    vertPos =  proj*view*model*vertPos;
 }
